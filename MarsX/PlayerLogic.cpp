@@ -27,6 +27,7 @@ bool MX::PlayerLogic::Init(std::shared_ptr<flecs::world> _game,
 	controllerInput = _controllerInput;
 	audioEngine = _audioEngine;
 	player = _player;
+
 	// setting default current Health
 	currentHealth = 0;
 	currentScore = 0;
@@ -39,23 +40,13 @@ bool MX::PlayerLogic::Init(std::shared_ptr<flecs::world> _game,
 	game->set<PlayerEmpowered>({ false });
 	// Init any helper systems required for this task
 	std::shared_ptr<const GameConfig> readCfg = gameConfig.lock();
-	// Grab Highscore from ini
-	/*std::ifstream file("Highscore.txt");
-	if (file)
-	{
-
-	}
-	else
-	{*/
+	// Grab Highscore from .ini
 	game->set<HighScore>({ (*readCfg).at("Scores").at("highscore").as<int>() });
-	/*}*/
 	int width = (*readCfg).at("Window").at("width").as<int>();
 	float speed = (*readCfg).at("Player").at("speed").as<float>();
 	const char* playerName = (*readCfg).at("Player").at("model").as<const char*>();
 	float _bulletSize = (*readCfg).at("Player-Lazers").at("lazScale").as<float>();
-	// TODO: Make it Data Driven
 	float rotSpeed = (*readCfg).at("Player").at("rotSpeed").as<float>();
-	// END TODO:
 	float scale = (*readCfg).at("Player").at("scale").as<float>();
 
 	// Bullet Damage Multipler Powerup Stats
@@ -155,7 +146,7 @@ bool MX::PlayerLogic::Init(std::shared_ptr<flecs::world> _game,
 
 	menuController.Activate(true);
 
-	// add logic for updating playersw
+	// add logic for updating players position and direction
 	playerSystem = game->system<Player, Transform::Position, Transform::Orientation, ControllerID, Health>("Player System")
 		.iter([this, speed, DmgMult, rotSpeed, playerName, _bulletSize, lazerModelName, maxNumberOfMultMissiles](flecs::iter it, Player*, Transform::Position* p,
 			Transform::Orientation* o, ControllerID* c, Health* h) {
@@ -164,12 +155,10 @@ bool MX::PlayerLogic::Init(std::shared_ptr<flecs::world> _game,
 					currentHealth = h[i].value;
 
 					MX::PLAY_EVENT_DATA x;
-					//x.Score = currentscore;
 					float horizontalInput = 0;
 					float verticalInput = 0;
 					game->set<PlayerScore>({ currentScore });
 					game->set<PlayerHealth>({ currentHealth });
-					//game->set<PlayerEmpowered>({ false });
 					// left-right movement
 					float zaxis = 0, yaxis = 0, input = 0;
 					// Use the controller/keyboard to move the player around the screen	
@@ -180,6 +169,7 @@ bool MX::PlayerLogic::Init(std::shared_ptr<flecs::world> _game,
 						}
 					}
 
+					// Create Event for when the Player is Taking Damage
 					onTakingDamage.Create([this, c, i](const GW::GEvent& e) {
 
 						MX::PLAY_EVENT event; MX::PLAY_EVENT_DATA eventData;
@@ -225,10 +215,13 @@ bool MX::PlayerLogic::Init(std::shared_ptr<flecs::world> _game,
 
 					if (!isPaused)
 					{
+						// DEBUG: Killing the Player with F7
+#if _DEBUG
 						if (kbm_states[G_KEY_F7] == 1)
 							currentHealth = 0;
+#endif
 
-
+						// Gamepad Inputs
 						bool controllerIsConnected;
 						controllerInput.IsConnected(i, controllerIsConnected);
 						float _controllerDpadLeftInput = 0, _controllerDpadRightInput = 0;
@@ -298,11 +291,11 @@ bool MX::PlayerLogic::Init(std::shared_ptr<flecs::world> _game,
 						zaxis = G_LARGER(zaxis, -1);// cap right motion
 						zaxis = G_SMALLER(zaxis, 1);// cap left motion
 
-						// apply movement
+						// apply movement by adding the values of the Keyboad and Controller Inputs
 						verticalInput = (kbm_states[G_KEY_W] - kbm_states[G_KEY_S]) + (_controllerDpadUpInput + _controllerDpadDownInput) + (_controllerLeftStickYInput);
 						horizontalInput = (kbm_states[G_KEY_D] - kbm_states[G_KEY_A]) + (_controllerDpadRightInput + _controllerDpadLeftInput) + (_controllerLeftStickXInput);
 
-
+						// Moves Player Up, Down, Forward, and back
 						if (!(verticalInput == 0 && horizontalInput == 0))
 						{
 							if (!movingRight || !movingLeft)
@@ -313,6 +306,7 @@ bool MX::PlayerLogic::Init(std::shared_ptr<flecs::world> _game,
 									facingLeft = true;
 									facingRight = false;
 
+									// Sends an Event to the Camera to Interpolate it's offset oppsoite to where the Player is facing
 									GW::GEvent movingLeft;
 									MX::GAMEPLAY_STATE_DATA gameData;
 									gameData.facingLeft = true;
@@ -325,6 +319,8 @@ bool MX::PlayerLogic::Init(std::shared_ptr<flecs::world> _game,
 									movingRight = true;
 									facingRight = true;
 									facingLeft = false;
+
+									// Sends an Event to the Camera to Interpolate it's offset oppsoite to where the Player is facing
 									GW::GEvent movingRight;
 									MX::GAMEPLAY_STATE_DATA gameData;
 									gameData.facingLeft = false;
@@ -336,6 +332,7 @@ bool MX::PlayerLogic::Init(std::shared_ptr<flecs::world> _game,
 							}
 						}
 
+						// Turns the Player Depending Which Input Horizontal the User is pressing
 						if (movingRight)
 						{
 							if (currentAngle < standardRightOrient)
@@ -364,6 +361,7 @@ bool MX::PlayerLogic::Init(std::shared_ptr<flecs::world> _game,
 
 						p[i].value.y += verticalInput * it.delta_time() * speed;
 						p[i].value.z += horizontalInput * it.delta_time() * speed;
+
 						// limit the player to stay within the Playable Area
 						p[i].value.z = G_LARGER(p[i].value.z, -1179.0f);
 						p[i].value.z = G_SMALLER(p[i].value.z, +1179.0f);
@@ -400,7 +398,6 @@ bool MX::PlayerLogic::Init(std::shared_ptr<flecs::world> _game,
 							it.entity(i).remove<Firing>();
 						}
 
-						//DED
 						if (currentHealth <= 0)
 						{
 							// Game Over Reinitalize the Player
@@ -456,6 +453,7 @@ bool MX::PlayerLogic::Init(std::shared_ptr<flecs::world> _game,
 	bufferedInput.Register(pressEvents);
 	controllerInput.Register(pressEvents);
 
+	// An Event Receiever from the Enemy, that when it dies it grants the Player points
 	onDestroyEnemy.Create([this](const GW::GEvent& e) {
 		MX::PLAY_EVENT event; MX::PLAY_EVENT_DATA eventData;
 		if (+e.Read(event, eventData) && (event == MX::PLAY_EVENT::ENEMY_DESTROYED)) {
@@ -483,31 +481,32 @@ bool MX::PlayerLogic::Shutdown()
 	return true;
 }
 
+// Getters
 bool MX::PlayerLogic::GetFacingRight()
 {
 	return facingRight;
 }
-
+// Setters
 void MX::PlayerLogic::SetFacingRight(bool _facingRight)
 {
 	facingRight = _facingRight;
 }
-
+// Getters
 bool MX::PlayerLogic::GetFacingLeft()
 {
 	return facingLeft;
 }
-
+// Setters
 void MX::PlayerLogic::SetFacingLeft(bool _facingLeft)
 {
 	facingLeft = _facingLeft;
 }
-
+// Getters
 bool MX::PlayerLogic::GetIsDead()
 {
 	return isDead;
 }
-
+// Setters
 void MX::PlayerLogic::SetIsDead(bool _isDead)
 {
 	isDead = _isDead;
@@ -525,6 +524,7 @@ bool MX::PlayerLogic::Activate(bool runSystem)
 	return false;
 }
 
+// Any Input that has been pressed will happen only once
 bool MX::PlayerLogic::ProcessInputEvents(const char* playerName, flecs::world& stage, float kbs_state[256])
 {
 	// pull any waiting events from the event cache and process them
