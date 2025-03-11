@@ -1,11 +1,12 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "Actor/CameraTriggerBox.h"
-#include "Actor/BasePlayer.h"
+#include "CameraTriggerBox.h"
+#include "BasePlayer.h"
+#include "MainCamera.h"
+
 #include "Components/BoxComponent.h"
-#include "Actor/Utilities/SideScrollingCameraComponent.h"
-#include "Actor/MainCamera.h"
+#include "SideScrollingCameraComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
 
